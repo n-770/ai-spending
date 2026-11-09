@@ -1,0 +1,7 @@
+# Locally generated app bundle
+/build/
+
+# Local credentials and macOS metadata
+.env
+.env.*
+.DS_Store
