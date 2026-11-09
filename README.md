@@ -4,7 +4,7 @@ A personal macOS menu-bar monitor (macOS 13+, built for the current Mac architec
 
 ## Setup
 
-1. Build with `./build.sh`, then open `build/AI Spending.app`.
+1. Build with `./build.sh`, then open `build/AI-Spending.app`.
 2. Choose **Set OpenRouter API Key…** in the menu, enter a regular inference key, and choose **Verify and Save**. The key is tested against OpenRouter before replacing any previously saved key. Management/provisioning keys are rejected. Network, validation, or Keychain errors leave the previous key in place.
 3. Choose **Test notification** and allow macOS notifications when prompted. Check the menu's permission status and System Settings if needed. “Test submitted” means macOS accepted the request, not that it was displayed; Focus and other system settings can suppress display.
 4. Optionally enable **Start at Login** in the menu and approve it in System Settings if required.
@@ -21,7 +21,7 @@ The selected key is sent as a bearer token to OpenRouter's `GET https://openrout
 
 ## Migration
 
-The app bundle is now `AI Spending.app`; the bundle identifier remains `com.personal.openrouter-spend` to retain existing preferences and notification identity where macOS permits. The executable name is unchanged. The build does **not** delete the old `OpenRouter Spend.app`, modify any existing monitor or cron job, or alter login settings. Do not run both app copies simultaneously: they share preferences and may produce duplicate alerts. If you previously enabled login for the old bundle path, review and update the login item manually. Ad-hoc signatures, moved paths, and macOS permissions may affect migration; verify notifications and login on your Mac.
+The app bundle is now `AI-Spending.app`; the bundle identifier remains `com.personal.openrouter-spend` to retain existing preferences and notification identity where macOS permits. The executable name is unchanged. The build does **not** delete older `AI Spending.app` or `OpenRouter Spend.app` bundles, modify any existing monitor or cron job, or alter login settings. Do not run multiple app copies simultaneously: they share preferences and may produce duplicate alerts. If you previously enabled login for an old bundle path, review and update the login item manually. Ad-hoc signatures, moved paths, and macOS permissions may affect migration; verify notifications and login on your Mac.
 
 ## Build and test
 
@@ -31,13 +31,13 @@ Requires Apple Command Line Tools. The build is ad-hoc signed, not notarized; ma
 ./build.sh
 swiftc Sources/SpendCore/Usage.swift Tests/main.swift -o "${TMPDIR:-/tmp}/ai-spending-core-tests"
 "${TMPDIR:-/tmp}/ai-spending-core-tests"
-codesign --verify --deep --strict --verbose=2 'build/AI Spending.app'
+codesign --verify --deep --strict --verbose=2 'build/AI-Spending.app'
 ```
 
 For an optional live read-only connectivity and field-validation check that prints neither key nor amounts:
 
 ```sh
-'build/AI Spending.app/Contents/MacOS/OpenRouterSpend' --check
+'build/AI-Spending.app/Contents/MacOS/OpenRouterSpend' --check
 ```
 
 The check reads the configured runtime key and requires network access. GUI notification delivery, wake behavior, and login registration require manual verification in the target macOS session.
