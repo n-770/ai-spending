@@ -27,6 +27,8 @@ The app bundle is now `AI-Spending.app`; the bundle identifier remains `com.pers
 
 Requires Apple Command Line Tools. The build is ad-hoc signed, not notarized; macOS may warn on a moved or downloaded build. Approve it only if you trust it.
 
+The bundled generic rounded-gauge icon is `assets/logo/AI-Spending.icns`, derived from the approved `assets/logo/concepts/gauge-01.svg`. To regenerate the transparent PNG iconset and ICNS on macOS, run `bash assets/logo/scripts/build-icon.sh`. The native Core Graphics renderer transcribes the SVG geometry and colors and refuses a changed SVG until the transcription is reviewed. It uses macOS tools only, with no pip dependencies. Icon regeneration is separate from the app build; the build copies the checked-in ICNS before signing. Do not rebuild over a running app bundle: stop it first or build in a separate copy.
+
 ```sh
 ./build.sh
 swiftc Sources/SpendCore/Usage.swift Tests/main.swift -o "${TMPDIR:-/tmp}/ai-spending-core-tests"

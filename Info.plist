@@ -2,6 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>OpenRouterSpend</string>
+<key>CFBundleIconFile</key><string>AI-Spending.icns</string>
 <key>CFBundleIdentifier</key><string>com.personal.openrouter-spend</string>
 <key>CFBundleName</key><string>AI Spending</string>
 <key>CFBundleDisplayName</key><string>AI Spending</string>
