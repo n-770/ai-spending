@@ -1,6 +1,35 @@
 import Foundation
 import CoreFoundation
 public enum SpendError: Error { case invalidResponse, wrongKey }
+public enum KeyStatus {
+    case unknown, missing, error, keychain, environment, hermes
+    public var menuLine: String {
+        switch self {
+        case .unknown: return "API key: Checking…"
+        case .missing: return "API key: Not configured"
+        case .error: return "API key: Status unavailable"
+        case .keychain: return "API key: Configured (Keychain)"
+        case .environment: return "API key: Configured (environment)"
+        case .hermes: return "API key: Configured (Hermes)"
+        }
+    }
+    public var actionTitle: String {
+        switch self {
+        case .missing: return "Set OpenRouter API Key…"
+        case .keychain, .environment, .hermes: return "Change OpenRouter API Key…"
+        case .unknown, .error: return "Set or Change OpenRouter API Key…"
+        }
+    }
+    public var dialogText: String {
+        "Enter a regular inference key. OpenRouter verifies it before saving. A successful save replaces any existing app Keychain key and takes precedence over environment and Hermes keys, which are not changed. If verification or saving fails, the previous key is retained."
+    }
+}
+public func selectKey(keychain: () throws -> String?, environment: () -> String?, hermes: () throws -> String?) throws -> (key: String?, status: KeyStatus) {
+    if let key = try keychain() { return (key, .keychain) }
+    if let key = environment() { return (key, .environment) }
+    if let key = try hermes() { return (key, .hermes) }
+    return (nil, .missing)
+}
 public struct Usage {
     public let daily: Double?, weekly: Double?, monthly: Double?
     public static func parse(_ data: Data) throws -> Usage {

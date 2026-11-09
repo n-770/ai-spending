@@ -62,4 +62,34 @@ do { _ = try keychainSelection(status: 0, value: nil); fatalError("invalid Keych
 let presentSelection = try keychainSelection(status: 0, value: "test")
 precondition(presentSelection == "test")
 
-print("PASS: parsing, key identity, threshold retry, refresh races, UTC day, Keychain errors, and key replacement")
+// Source selection respects precedence and never falls back after a Keychain error.
+let selectedKeychain = try selectKey(keychain: { "keychain" }, environment: { "environment" }, hermes: { "hermes" })
+precondition(selectedKeychain.status == .keychain && selectedKeychain.key == "keychain")
+let selectedEnvironment = try selectKey(keychain: { nil }, environment: { "environment" }, hermes: { "hermes" })
+precondition(selectedEnvironment.status == .environment && selectedEnvironment.key == "environment")
+let selectedHermes = try selectKey(keychain: { nil }, environment: { nil }, hermes: { "hermes" })
+precondition(selectedHermes.status == .hermes && selectedHermes.key == "hermes")
+let selectedMissing = try selectKey(keychain: { nil }, environment: { nil }, hermes: { nil })
+precondition(selectedMissing.status == .missing && selectedMissing.key == nil)
+var fallbackCalled = false
+do { _ = try selectKey(keychain: { throw KeychainReadError.invalidItem }, environment: { fallbackCalled = true; return "fallback" }, hermes: { nil }); fatalError("unexpected fallback") } catch {}
+precondition(!fallbackCalled)
+do { _ = try selectKey(keychain: { nil }, environment: { nil }, hermes: { throw KeychainReadError.invalidItem }); fatalError("unreadable fallback treated as missing") } catch {}
+
+// Menu reports the credential source without displaying the credential itself.
+precondition(KeyStatus.unknown.menuLine == "API key: Checking…")
+precondition(KeyStatus.missing.menuLine == "API key: Not configured")
+precondition(KeyStatus.error.menuLine == "API key: Status unavailable")
+precondition(KeyStatus.keychain.menuLine == "API key: Configured (Keychain)")
+precondition(KeyStatus.environment.menuLine == "API key: Configured (environment)")
+precondition(KeyStatus.hermes.menuLine == "API key: Configured (Hermes)")
+precondition(KeyStatus.missing.actionTitle == "Set OpenRouter API Key…")
+precondition(KeyStatus.keychain.actionTitle == "Change OpenRouter API Key…")
+precondition(KeyStatus.environment.actionTitle == "Change OpenRouter API Key…")
+precondition(KeyStatus.error.actionTitle == "Set or Change OpenRouter API Key…")
+precondition(KeyStatus.unknown.actionTitle == "Set or Change OpenRouter API Key…")
+precondition(KeyStatus.keychain.dialogText.contains("replaces"))
+precondition(KeyStatus.environment.dialogText.contains("not changed"))
+precondition(KeyStatus.error.dialogText.contains("retained"))
+
+print("PASS: parsing, key identity, threshold retry, refresh races, UTC day, Keychain errors, key replacement, and key status")

@@ -21,24 +21,32 @@ func saveKey(_ key: String) -> Bool {
     var query = keyQuery; query[kSecValueData as String] = data; query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
 }
-func loadKey() throws -> String? {
-    if let key = try keychainKey() { return key }
-    if let s = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { return s }
-    let path = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".hermes/.env")
-    guard let text = try? String(contentsOf: path, encoding: .utf8) else { return nil }
-    for line in text.components(separatedBy: .newlines) where line.hasPrefix("OPENROUTER_API_KEY=") {
-        let s = String(line.dropFirst("OPENROUTER_API_KEY=".count)).trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-        if !s.isEmpty { return s }
-    }
-    return nil
+func loadKey() throws -> (key: String?, status: KeyStatus) {
+    try selectKey(keychain: keychainKey, environment: {
+        guard let s = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        return s
+    }, hermes: {
+        let path = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".hermes/.env")
+        let text: String
+        do { text = try String(contentsOf: path, encoding: .utf8) }
+        catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError { return nil }
+        for line in text.components(separatedBy: .newlines) where line.hasPrefix("OPENROUTER_API_KEY=") {
+            let s = String(line.dropFirst("OPENROUTER_API_KEY=".count)).trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            if !s.isEmpty { return s }
+        }
+        return nil
+    })
 }
 final class NoRedirects: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
 let apiSession = URLSession(configuration: .ephemeral, delegate: NoRedirects(), delegateQueue: nil)
-func requestUsage(key: String? = nil, _ completion: @escaping (Result<Usage, Error>) -> Void) {
+func requestUsage(key: String? = nil, onSelection: ((KeyStatus) -> Void)? = nil, _ completion: @escaping (Result<Usage, Error>) -> Void) {
     let selected: String?
-    do { selected = try key ?? loadKey() } catch { completion(.failure(error)); return }
+    do {
+        if let key { selected = key }
+        else { let result = try loadKey(); selected = result.key; onSelection?(result.status) }
+    } catch { onSelection?(.error); completion(.failure(error)); return }
     guard let key = selected else { completion(.failure(NSError(domain: "Missing inference key", code: 1))); return }
     var req = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/key")!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
     req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
@@ -55,6 +63,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     let refreshGate = RefreshGate()
     var latest: Usage?; var updated: Date?; var error: String?; var busy = false; var keyBusy = false
     var notificationStatus = "Checking…"; var notificationMessage: String?
+    var keyStatus: KeyStatus = .unknown
     var keyRevision = 0
     var timer: Timer?
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -79,9 +88,10 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
         line("Notifications: \(notificationStatus)", menu)
         if let notificationMessage { line(notificationMessage, menu) }
         line("Provider charges may lag; excludes other keys and BYOK.", menu)
+        line(keyStatus.menuLine, menu)
         menu.addItem(.separator())
         let refresh = NSMenuItem(title: busy ? "Refreshing…" : "Refresh now", action: #selector(refreshAction), keyEquivalent: "r"); refresh.target = self; refresh.isEnabled = !busy && !keyBusy; menu.addItem(refresh)
-        let key = NSMenuItem(title: keyBusy ? "Verifying key…" : "Set OpenRouter API Key…", action: #selector(setKey), keyEquivalent: ""); key.target = self; key.isEnabled = !keyBusy && !busy; menu.addItem(key)
+        let key = NSMenuItem(title: keyBusy ? "Verifying key…" : keyStatus.actionTitle, action: #selector(setKey), keyEquivalent: ""); key.target = self; key.isEnabled = !keyBusy && !busy; menu.addItem(key)
         let test = NSMenuItem(title: "Test notification", action: #selector(testNotification), keyEquivalent: ""); test.target = self; menu.addItem(test)
         let login = NSMenuItem(title: "Start at Login", action: #selector(toggleLogin), keyEquivalent: ""); login.target = self; login.state = SMAppService.mainApp.status == .enabled ? .on : .off; menu.addItem(login)
         if SMAppService.mainApp.status == .requiresApproval { line("Login item requires approval in System Settings", menu) }
@@ -93,7 +103,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     func refresh() {
         let requestDay = utcDay(Date())
         guard let token = refreshGate.beginRefresh(day: requestDay) else { return }; busy = true; buildMenu()
-        requestUsage { [weak self] result in DispatchQueue.main.async {
+        requestUsage(onSelection: { [weak self] status in self?.keyStatus = status; self?.buildMenu() }) { [weak self] result in DispatchQueue.main.async {
             guard let self else { return }; self.busy = false; self.refreshGate.finishRefresh(token)
             guard self.refreshGate.isCurrent(token, day: utcDay(Date())) else { self.buildMenu(); self.refresh(); return }
             switch result {
@@ -101,6 +111,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
             case .failure(let e):
                 if let e = e as? SpendError, case .wrongKey = e { self.error = "Not a verified regular key" }
                 else if e is KeychainReadError { self.error = "Keychain unavailable or invalid; unlock or check access" }
+                else if self.keyStatus == .error { self.error = "Key source unavailable" }
                 else { self.error = "Could not refresh" }
             }
             self.buildMenu()
@@ -109,7 +120,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     @objc func setKey() {
         guard refreshGate.beginKeyEntry() else { return }
         keyBusy = true; buildMenu()
-        let dialog = NSAlert(); dialog.messageText = "Set OpenRouter API Key"; dialog.informativeText = "Enter a regular inference key. It will be verified with OpenRouter before being saved in Keychain."
+        let dialog = NSAlert(); dialog.messageText = keyStatus.actionTitle.replacingOccurrences(of: "…", with: ""); dialog.informativeText = keyStatus.dialogText
         let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24)); dialog.accessoryView = field
         dialog.addButton(withTitle: "Verify and Save"); dialog.addButton(withTitle: "Cancel")
         NSApp.activate(ignoringOtherApps: true)

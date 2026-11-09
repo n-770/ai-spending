@@ -5,7 +5,7 @@ A personal macOS menu-bar monitor (macOS 13+, built for the current Mac architec
 ## Setup
 
 1. Build with `./build.sh`, then open `build/AI-Spending.app`.
-2. Choose **Set OpenRouter API Key…** in the menu, enter a regular inference key, and choose **Verify and Save**. The key is tested against OpenRouter before replacing any previously saved key. Management/provisioning keys are rejected. Network, validation, or Keychain errors leave the previous key in place.
+2. The menu shows whether a key is configured and its source, or if its status is unavailable. Choose **Set OpenRouter API Key…** or **Change OpenRouter API Key…**, enter a regular inference key, and choose **Verify and Save**. The key is tested against OpenRouter before replacing any previously saved app Keychain key. It takes precedence over environment and Hermes keys without changing them. Management/provisioning keys are rejected. Network, validation, or Keychain errors leave the previous key in place. “Configured” indicates a key was found, not that OpenRouter has verified it.
 3. Choose **Test notification** and allow macOS notifications when prompted. Check the menu's permission status and System Settings if needed. “Test submitted” means macOS accepted the request, not that it was displayed; Focus and other system settings can suppress display.
 4. Optionally enable **Start at Login** in the menu and approve it in System Settings if required.
 
