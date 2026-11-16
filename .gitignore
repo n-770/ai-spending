@@ -5,3 +5,11 @@
 .env
 .env.*
 .DS_Store
+
+# Real usage data: activity exports and the local spend log never belong in git
+/export/
+*.jsonl
+
+# Python bytecode from the forecast jobs
+__pycache__/
+*.pyc

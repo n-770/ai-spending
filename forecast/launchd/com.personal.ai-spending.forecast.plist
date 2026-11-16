@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.personal.ai-spending.forecast</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/honolulu/Library/Application Support/AI-Spending/venv/bin/python</string>
+        <string>/Users/honolulu/workspace/digital-products/ai-spending/forecast/forecast.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/honolulu/workspace/digital-products/ai-spending/forecast</string>
+    <key>StartInterval</key>
+    <integer>21600</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/honolulu/Library/Logs/ai-spending-forecast.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/honolulu/Library/Logs/ai-spending-forecast.log</string>
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
