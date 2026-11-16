@@ -110,3 +110,58 @@ public func keychainSelection(status: Int32, value: String?) throws -> String? {
     guard let value, !value.isEmpty else { throw KeychainReadError.invalidItem }
     return value
 }
+
+// Written by the out-of-process forecaster (forecast/forecast.py). Read-only here;
+// the app never loads a model. Absent or unreadable file simply means "no line".
+public struct SpendForecast {
+    public let projected: Double
+    public let low: Double?
+    public let high: Double?
+    public let horizonDays: Int
+    public let periodEnd: String
+    public let fromModel: Bool
+    public let staleDays: Int
+    public let preliminary: Bool
+    public static func parse(_ data: Data) throws -> SpendForecast {
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw SpendError.invalidResponse }
+        func number(_ key: String, minimum: Double = 0) -> Double? {
+            guard let n = root[key] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite, n.doubleValue >= minimum else { return nil }
+            return n.doubleValue
+        }
+        guard let projected = number("projected_total"), let horizon = number("horizon_days"),
+              let end = root["period_end"] as? String, end.count == 10 else { throw SpendError.invalidResponse }
+        let low = number("low"), high = number("high")
+        let method = root["method"] as? String ?? ""
+        let stale = number("stale_days").map { Int($0) } ?? 0
+        let prelim = (root["preliminary"] as? NSNumber).map { $0.boolValue } ?? false
+        return SpendForecast(projected: projected,
+                             low: low, high: high,
+                             horizonDays: Int(horizon),
+                             periodEnd: end,
+                             fromModel: method.hasPrefix("timesfm"),
+                             staleDays: stale,
+                             preliminary: prelim)
+    }
+    private var endLabel: String {
+        if let label = SpendForecast.dayLabel(periodEnd) { return label }
+        return periodEnd
+    }
+    static func dayLabel(_ isoDay: String) -> String? {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale.current
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "yyyy-MM-dd"
+        guard let date = f.date(from: isoDay) else { return nil }
+        let out = DateFormatter(); out.locale = Locale.current
+        out.setLocalizedDateFormatFromTemplate("MMMd")
+        return out.string(from: date)
+    }
+    public func menuLine(money: (Double?) -> String) -> String {
+        let base = "Projected \(endLabel): \(money(projected))"
+        if staleDays > 1 { return base + " · forecast \(staleDays)d old" }
+        if preliminary { return base + " · preliminary" }
+        if fromModel, let low, let high, low <= projected, projected <= high { return base + " (range \(money(low))–\(money(high)))" }
+        return base + " (pace)"
+    }
+}

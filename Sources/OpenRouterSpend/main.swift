@@ -40,6 +40,13 @@ func loadKey() throws -> (key: String?, status: KeyStatus) {
 final class NoRedirects: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
+// Written every few hours by the out-of-process forecaster; absence is not an error.
+func loadForecast() -> SpendForecast? {
+    let url = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/AI-Spending/forecast.json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? SpendForecast.parse(data)
+}
 let apiSession = URLSession(configuration: .ephemeral, delegate: NoRedirects(), delegateQueue: nil)
 func requestUsage(key: String? = nil, onSelection: ((KeyStatus) -> Void)? = nil, _ completion: @escaping (Result<Usage, Error>) -> Void) {
     let selected: String?
@@ -62,6 +69,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     let alerts = AlertState()
     let refreshGate = RefreshGate()
     var latest: Usage?; var updated: Date?; var error: String?; var busy = false; var keyBusy = false
+    var forecast: SpendForecast?
     var notificationStatus = "Checking…"; var notificationMessage: String?
     var keyStatus: KeyStatus = .unknown
     var keyRevision = 0
@@ -82,6 +90,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
         line("Today (UTC): \(money(latest?.daily))", menu)
         line("Week (UTC Monday): \(money(latest?.weekly))", menu)
         line("Month (UTC): \(money(latest?.monthly))", menu)
+        if let forecast { line(forecast.menuLine(money: money), menu) }
         if let updated { line("Last success: \(DateFormatter.localizedString(from: updated, dateStyle: .short, timeStyle: .medium))", menu) } else { line("No successful update yet", menu) }
         if let error { line("Error: \(error) · values may be stale", menu) }
         else if let updated, Date().timeIntervalSince(updated) > 120 { line("Stale: last update over 2 minutes ago", menu) }
@@ -102,6 +111,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     @objc func refreshAction() { refresh() }
     func refresh() {
         let requestDay = utcDay(Date())
+        forecast = loadForecast()
         guard let token = refreshGate.beginRefresh(day: requestDay) else { return }; busy = true; buildMenu()
         requestUsage(onSelection: { [weak self] status in self?.keyStatus = status; self?.buildMenu() }) { [weak self] result in DispatchQueue.main.async {
             guard let self else { return }; self.busy = false; self.refreshGate.finishRefresh(token)
@@ -199,5 +209,15 @@ if CommandLine.arguments.contains("--check") {
     if sem.wait(timeout: .now() + 20) == .timedOut { print("LIVE: timeout"); exit(1) }
     exit(succeeded ? 0 : 1)
 }
+if CommandLine.arguments.contains("--forecast") {
+    // Read-only diagnostic: the exact dropdown line, built from the real file.
+    if let f = loadForecast() {
+        print("FORECAST: " + f.menuLine(money: { $0.map { String(format: "$%.2f", $0) } ?? "Unknown" }))
+        exit(0)
+    }
+    print("FORECAST: no usable forecast file")
+    exit(1)
+}
+
 let app = NSApplication.shared
 let delegate = App(); app.delegate = delegate; app.setActivationPolicy(.accessory); app.run()

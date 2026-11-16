@@ -92,4 +92,41 @@ precondition(KeyStatus.keychain.dialogText.contains("replaces"))
 precondition(KeyStatus.environment.dialogText.contains("not changed"))
 precondition(KeyStatus.error.dialogText.contains("retained"))
 
-print("PASS: parsing, key identity, threshold retry, refresh races, UTC day, Keychain errors, key replacement, and key status")
+// Forecast line is read-only and permissive: a bad or absent file must not break the menu.
+func moneyText(_ n: Double?) -> String { n.map { String(format: "$%.2f", $0) } ?? "Unknown" }
+let modelForecast = try SpendForecast.parse(Data("""
+{"projected_total":102.83,"low":81.7,"high":122.83,"horizon_days":14,"period_end":"2026-11-30","method":"timesfm3-mean","stale_days":0}
+""".utf8))
+precondition(modelForecast.horizonDays == 14 && modelForecast.fromModel)
+precondition(modelForecast.projected == 102.83 && modelForecast.low == 81.7 && modelForecast.high == 122.83)
+let modelLine = modelForecast.menuLine(money: moneyText)
+precondition(modelLine.hasPrefix("Projected "), modelLine)
+precondition(modelLine.contains("$102.83") && modelLine.contains("range"), modelLine)
+precondition(modelLine.contains("$81.70") && modelLine.contains("$122.83"), modelLine)
+let paceForecast = try SpendForecast.parse(Data("""
+{"projected_total":38.4,"low":null,"high":null,"horizon_days":14,"period_end":"2026-11-30","method":"pace-naive-28d","stale_days":0}
+""".utf8))
+precondition(!paceForecast.fromModel)
+precondition(paceForecast.menuLine(money: moneyText).hasSuffix("(pace)"))
+let staleForecast = try SpendForecast.parse(Data("""
+{"projected_total":10,"low":9,"high":12,"horizon_days":5,"period_end":"2026-11-30","method":"timesfm3-mean","stale_days":3}
+""".utf8))
+precondition(staleForecast.menuLine(money: moneyText).contains("3d old"))
+let earlyForecast = try SpendForecast.parse(Data("""
+{"projected_total":4.2,"low":null,"high":null,"horizon_days":9,"period_end":"2026-11-30","method":"pace-naive-28d","stale_days":0,"preliminary":true}
+""".utf8))
+precondition(earlyForecast.preliminary)
+precondition(earlyForecast.menuLine(money: moneyText).hasSuffix("· preliminary"))
+// Inconsistent bounds fall back to the pace wording instead of printing a nonsense range.
+let badBounds = try SpendForecast.parse(Data("""
+{"projected_total":10,"low":20,"high":12,"horizon_days":5,"period_end":"2026-11-30","method":"timesfm3-mean","stale_days":0}
+""".utf8))
+precondition(badBounds.menuLine(money: moneyText).hasSuffix("(pace)"))
+for json in ["{}", "{\"horizon_days\":3,\"period_end\":\"2026-11-30\"}",
+             "{\"projected_total\":\"9\",\"horizon_days\":3,\"period_end\":\"2026-11-30\"}",
+             "{\"projected_total\":9,\"horizon_days\":3,\"period_end\":\"2026-11\"}"] {
+    do { _ = try SpendForecast.parse(Data(json.utf8)); fatalError("invalid forecast accepted: \(json)") } catch {}
+}
+precondition(SpendForecast.dayLabel("not-a-day") == nil)
+
+print("PASS: parsing, key identity, threshold retry, refresh races, UTC day, Keychain errors, key replacement, key status, and forecast line")

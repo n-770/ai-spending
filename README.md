@@ -15,6 +15,8 @@ Key source precedence is the app's Keychain entry, `OPENROUTER_API_KEY` environm
 
 Today, week (Monday start), and month are UTC. Figures are this key's OpenRouter credit usage, **not account-wide spending**; external BYOK usage and other keys are excluded. Provider accounting may lag. Missing or invalid values show Unknown. Refresh runs every minute while awake, on wake, and manually. Errors retain the last values and mark them potentially stale. The monitor cannot cap or stop spending.
 
+A **Projected &lt;date&gt;** line appears when the optional forecaster has written `~/Library/Application Support/AI-Spending/forecast.json` (see `forecast/README.md`). It is produced by a scheduled job, not by the app: the app only reads the file, and shows no line when it is absent or unreadable. Model-based projections show a range; the fallback shows “(pace)”, meaning month-to-date plus a weekday-aware pace over the last 14 days for the remaining days. If the file is more than a day behind, the line is marked with its age. The projection is an estimate, not a commitment or a cap.
+
 Alerts are attempted at $5 and $10 once per UTC day, and recorded only after macOS accepts the notification request. A failed submission can retry on refresh; acceptance does not guarantee display. Alerts are not submitted when permission or alert presentation is disabled. A crash after macOS accepts a notification but before local persistence can cause a duplicate. Alert state is shared across keys: changing keys does not reset thresholds already recorded that UTC day.
 
 The selected key is sent as a bearer token to OpenRouter's `GET https://openrouter.ai/api/v1/key` to validate and refresh usage; OpenRouter receives that credential and request. The app does not log or display the key. A manually entered key is stored in the local macOS Keychain; legacy environment/Hermes sources remain where you configured them. Threshold state is stored in local UserDefaults; no analytics are included. macOS controls notification display and login registration.
@@ -40,6 +42,7 @@ For an optional live read-only connectivity and field-validation check that prin
 
 ```sh
 'build/AI-Spending.app/Contents/MacOS/OpenRouterSpend' --check
+'build/AI-Spending.app/Contents/MacOS/OpenRouterSpend' --forecast   # the dropdown line, from the real file
 ```
 
 The check reads the configured runtime key and requires network access. GUI notification delivery, wake behavior, and login registration require manual verification in the target macOS session.
